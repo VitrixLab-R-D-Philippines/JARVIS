@@ -1,52 +1,55 @@
-# JARVIS
-an AI Operating System
-
-
 # JARVIS: AI Operating System
 
-<img width="800" height="600" alt="JARVIS tager GUI" src="https://github.com/user-attachments/assets/a7b35403-1d87-46c7-8c4e-81d688e04af0" />
+<img src="https://github.com/VitrixLab-R-D-Philippines/JARVIS/blob/63e36a8aa13fdfb4a04491af5156329bd1acf8d6/JARVIS%20tager%20GUI.png" alt="JARVIS GUI" width="540">
 
-## 🚀 Overview
+## Overview
 
-JARVIS is an intelligent AI Operating System designed to streamline workflows, enhance productivity, and provide real-time insights across multiple applications. It combines powerful AI capabilities with a user-centric interface for a seamless and intuitive experience.
+JARVIS is an intelligent AI Operating System designed to streamline workflows, enhance productivity, and provide real-time insights through an intuitive, user-centric interface.
 
----
+## Key Features
 
-## 🧩 Key Features
+- Intelligent Task Automation
+- Real-Time Analytics
+- Cross-Platform Integration
+- Adaptive UI
+- Voice Feedback & Interaction
 
-- **Intelligent Task Automation:** Automate routine tasks and prioritize actions based on user behavior.  
-- **Real-Time Analytics:** Interactive visualizations and actionable insights.  
-- **Cross-Platform Integration:** Connects effortlessly with other tools and platforms.  
-- **Adaptive UI:** Responsive interface that adjusts to user preferences and device specifications.  
-- **Voice Feedback & Interaction:** Integrates speech recognition and TTS for interactive control.  
+## UI/UX Design Principles
 
----
+- Consistency
+- Feedback
+- Accessibility
+- Responsiveness
+- Interactive Controls
 
-## 🎨 UI/UX Design Principles
+## Project Milestones
 
-Our UI/UX design focuses on clarity, usability, and responsiveness:  
+- **Phase 1**: Conceptualization & Wireframing ✅ Completed
+- **Phase 2**: Core Development & Usability Testing ✅ Completed
+- **Phase 3**: Deployment & Continuous Improvement ⚙️ Ongoing
+- **Phase 4**: Advanced AI Modules & Multi-platform Integration 🔜 Upcoming
 
-- **Consistency:** Uniform visual elements for cohesive user experience.  
-- **Feedback:** Immediate visual and auditory responses to actions.  
-- **Accessibility:** High-contrast modes, keyboard navigation, and screen reader support.  
-- **Responsiveness:** Optimized layout for all devices.  
-- **Interactive Controls:** Sliders, toggles, and animation feedback for a dynamic experience.  
-
----
-
-## 🏗️ Project Milestones (JARVIS Progress)
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | Conceptualization & Wireframing | ✅ Completed |
-| Phase 2 | Core Development & Usability Testing | ✅ Completed |
-| Phase 3 | Deployment & Continuous Improvement | ⚙️ Ongoing |
-| Phase 4 | Advanced AI Modules & Multi-platform Integration | 🔜 Upcoming |
-
----
-
-## ⚡ Getting Started
+## Getting Started
 
 1. Clone the repository:  
-```bash
-git clone https://github.com/vitrixlab-r-d-philippines/JARVIS.git
+   `git clone https://github.com/VitrixLab-R-D-Philippines/JARVIS.git`
+2. Navigate into the project directory:  
+   `cd JARVIS`
+3. Install dependencies:  
+   `pip install -r requirements.txt`
+4. Launch JARVIS:  
+   `python main.py`
+
+## Contributing
+
+We welcome contributions to enhance JARVIS. Please fork the repository, create a feature branch, commit your changes, and submit a pull request with detailed notes.
+
+## License
+
+MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**Copyright (c) 2025 Vitrix Lab**  
+All rights reserved.  
+Follow us on [Facebook](https://fb.com/vitrixlabph)
