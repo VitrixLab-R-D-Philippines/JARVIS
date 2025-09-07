@@ -46,16 +46,6 @@ Consistency, Feedback, Accessibility, Responsiveness, Interactive Controls
 
 **Priorities:** Build stable codebase, implement AI interactions, focus on core UI/UX, prepare documentation.
 
----
-
-## Getting Started
-
-```bash
-git clone https://github.com/vitrixlab-r-d-philippines/JARVIS.git
-cd JARVIS
-pip install -r requirements.txt
-python main.py
-
 ## Contributing
 
 Fork the repo, create a feature branch, commit changes, and submit a Pull Request.
@@ -74,3 +64,13 @@ All rights reserved.
 ## GitHub Topics / Keywords
 
 ai-os jarvis intelligent-automation real-time-analytics cross-platform adaptive-ui voice-interaction tts speech-recognition user-centric-design ui-ux responsive-design accessibility workflow-automation productivity-tools python pyqt5 vispy interactive-ai gui
+
+---
+
+## Getting Started
+
+```bash
+git clone https://github.com/vitrixlab-r-d-philippines/JARVIS.git
+cd JARVIS
+pip install -r requirements.txt
+python main.py
