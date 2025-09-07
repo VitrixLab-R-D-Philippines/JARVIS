@@ -1,6 +1,7 @@
 # JARVIS: AI Operating System
 
-<img src="https://github.com/VitrixLab-R-D-Philippines/JARVIS/blob/63e36a8aa13fdfb4a04491af5156329bd1acf8d6/JARVIS%20tager%20GUI.png" alt="JARVIS GUI" width="540">
+<img src="https://raw.githubusercontent.com/VitrixLab-R-D-Philippines/JARVIS/63e36a8aa13fdfb4a04491af5156329bd1acf8d6/JARVIS%20tager%20GUI.png" alt="JARVIS GUI" width="540">
+
 
 ## Overview
 
