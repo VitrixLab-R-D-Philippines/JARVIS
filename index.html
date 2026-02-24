@@ -298,5 +298,18 @@
     </div>
 
     <script src="sketch.js"></script>
+    
+    <script src="FermatEngineWasm.js"></script>
+    <script>
+        // Global variable for our C++ Engine Instance
+        let superEngine;
+    
+        // Wait for the Wasm binary to "Warm Up"
+        Module.onRuntimeInitialized = () => {
+            console.log("Super Engine API Loaded.");
+            superEngine = new Module.FermatEngine(100000); // 100k particles
+        };
+    </script>
 </body>
+
 </html>
