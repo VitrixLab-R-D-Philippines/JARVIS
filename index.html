@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Liquid Field – Particle Flow (WebGL2)</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    
+    <!-- "https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js" -->
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
     <style>
         /* ===== RESET & BASE ===== (unchanged, kept your beautiful design) ===== */
         * {
@@ -380,6 +383,7 @@
                 this.current = 0;
             }
 
+            /*
             createProgram(gl, vSrc, fSrc) {
                 const vs = gl.createShader(gl.VERTEX_SHADER);
                 gl.shaderSource(vs, vSrc);
@@ -411,6 +415,32 @@
                 gl.deleteShader(vs);
                 gl.deleteShader(fs);
 
+                return prog;
+            }
+            */
+            createProgram(gl, vSrc, fSrc) {
+                const vs = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vs, vSrc);
+                gl.compileShader(vs);
+                if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+                    console.error('Vertex shader compile error:', gl.getShaderInfoLog(vs));
+                }
+            
+                const fs = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fs, fSrc);
+                gl.compileShader(fs);
+                if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+                    console.error('Fragment shader compile error:', gl.getShaderInfoLog(fs));
+                }
+            
+                const prog = gl.createProgram();
+                gl.attachShader(prog, vs);
+                gl.attachShader(prog, fs);
+                gl.transformFeedbackVaryings(prog, ['v_pos', 'v_vel'], gl.INTERLEAVED_ATTRIBS);
+                gl.linkProgram(prog);
+                if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                    console.error('Program link error:', gl.getProgramInfoLog(prog));
+                }
                 return prog;
             }
 
@@ -495,7 +525,14 @@
         function setup() {
             // Create canvas with WebGL2 context
             createCanvas(windowWidth, windowHeight, WEBGL, { version: 2 });
-        
+            let gl = canvas.GL;
+            if (!gl) {
+                console.error('WebGL2 not supported – falling back to simple mode');
+                // Optionally display a message to the user
+                noLoop();
+                return;
+            }
+            
             // Set background color mode
             colorMode(RGB, 255);
             background(0);
@@ -621,4 +658,5 @@
     -->
 </body>
 </html>
+
 
