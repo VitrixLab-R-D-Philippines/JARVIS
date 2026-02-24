@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquid Field – Particle Flow (WebGL2)</title>
-    
-    <!-- "https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js" -->
-    
+    <title>Liquid Field – Particle Flow (WebGL2 + p5.js Trail)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
     <style>
-        /* ===== RESET & BASE ===== (unchanged, kept your beautiful design) ===== */
+        /* ===== RESET & BASE ===== */
         * {
             margin: 0;
             padding: 0;
@@ -24,20 +21,31 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
-        canvas {
+        /* Canvas layering */
+        #particle-canvas {
             display: block;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 1;
+            z-index: 0; /* bottom – particles */
+        }
+        #defaultCanvas0 {  /* p5.js canvas (P2D) */
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1; /* middle – trail effect */
+            pointer-events: none; /* let mouse events pass through to UI */
         }
         #ui-panel {
             position: absolute;
             top: 24px;
             left: 24px;
-            z-index: 10;
+            z-index: 2; /* top – UI */
             width: 300px;
             background: rgba(22, 22, 28, 0.75);
             backdrop-filter: blur(20px) saturate(180%);
@@ -201,6 +209,9 @@
     </style>
 </head>
 <body>
+    <!-- Dedicated WebGL2 canvas for particles -->
+    <canvas id="particle-canvas"></canvas>
+
     <div id="ui-panel" role="region" aria-label="Simulation controls">
         <div class="panel-header">
             <span class="icon" role="img" aria-label="Liquid field">💧</span>
@@ -296,7 +307,7 @@
             v_density = n;
             
             gl_Position = vec4(nextPos, 0.0, 1.0);
-            gl_PointSize = 1.5;  // will be enabled with PROGRAM_POINT_SIZE
+            gl_PointSize = 1.5;
         }
     </script>
     
@@ -305,53 +316,45 @@
         in float v_density;
         out vec4 outColor;
         void main() {
-            // Blueish color with some variation based on density
             outColor = vec4(0.2, 0.4 + v_density * 0.2, 0.9, 0.8);
         }
     </script>
 
     <script>
         // --------------------------------------------------------------
-        // WebGL2 Transform Feedback Pipeline (p5.js friendly)
+        // WebGL2 Transform Feedback Pipeline (pure WebGL2, no p5)
         // --------------------------------------------------------------
         class GPUPhysicsPipeline {
             constructor(gl, count) {
                 this.gl = gl;
                 this.count = count;
-                this.current = 0; // ping-pong index
+                this.current = 0;
 
-                // Compile shaders and link program with transform feedback varyings
                 const vSrc = document.getElementById('vshader').text;
                 const fSrc = document.getElementById('fshader').text;
                 this.program = this.createProgram(gl, vSrc, fSrc);
 
-                // Create two buffers (ping-pong) and corresponding VAOs
                 this.buffers = [this.createBuffer(count), this.createBuffer(count)];
                 this.vaos = [gl.createVertexArray(), gl.createVertexArray()];
 
                 for (let i = 0; i < 2; i++) {
                     gl.bindVertexArray(this.vaos[i]);
                     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers[i]);
-                    // a_pos (location 0) = 2 floats, offset 0
                     gl.enableVertexAttribArray(0);
                     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
-                    // a_vel (location 1) = 2 floats, offset 8
                     gl.enableVertexAttribArray(1);
                     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
                     gl.bindVertexArray(null);
                 }
 
-                // Uniform locations
                 this.uSourceLoc = gl.getUniformLocation(this.program, "u_source");
                 this.uSinkLoc   = gl.getUniformLocation(this.program, "u_sink");
                 this.uTimeLoc   = gl.getUniformLocation(this.program, "u_time");
                 this.uSpeedLoc  = gl.getUniformLocation(this.program, "u_speed");
             }
 
-            // Create a buffer filled with random positions (and zero velocity)
             createBuffer(count) {
                 const gl = this.gl;
-                // 4 floats per particle: x, y, vx, vy
                 const data = new Float32Array(count * 4);
                 for (let i = 0; i < count; i++) {
                     data[i*4] = (Math.random() * 2 - 1);     // x
@@ -365,7 +368,6 @@
                 return buf;
             }
 
-            // Re-fill both buffers with new random positions (reset)
             resetParticles() {
                 const gl = this.gl;
                 for (let i = 0; i < 2; i++) {
@@ -379,45 +381,9 @@
                     }
                     gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
                 }
-                // Reset the current index to 0 to avoid using stale data
                 this.current = 0;
             }
 
-            /*
-            createProgram(gl, vSrc, fSrc) {
-                const vs = gl.createShader(gl.VERTEX_SHADER);
-                gl.shaderSource(vs, vSrc);
-                gl.compileShader(vs);
-                if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-                    console.error('Vertex shader compile error:', gl.getShaderInfoLog(vs));
-                }
-
-                const fs = gl.createShader(gl.FRAGMENT_SHADER);
-                gl.shaderSource(fs, fSrc);
-                gl.compileShader(fs);
-                if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-                    console.error('Fragment shader compile error:', gl.getShaderInfoLog(fs));
-                }
-
-                const prog = gl.createProgram();
-                gl.attachShader(prog, vs);
-                gl.attachShader(prog, fs);
-
-                // Specify transform feedback varyings (must match vertex shader outputs)
-                gl.transformFeedbackVaryings(prog, ['v_pos', 'v_vel'], gl.INTERLEAVED_ATTRIBS);
-
-                gl.linkProgram(prog);
-                if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-                    console.error('Program link error:', gl.getProgramInfoLog(prog));
-                }
-
-                // Shaders can be detached/destroyed after linking
-                gl.deleteShader(vs);
-                gl.deleteShader(fs);
-
-                return prog;
-            }
-            */
             createProgram(gl, vSrc, fSrc) {
                 const vs = gl.createShader(gl.VERTEX_SHADER);
                 gl.shaderSource(vs, vSrc);
@@ -444,58 +410,42 @@
                 return prog;
             }
 
-            // Step the simulation: read from current buffer, write to next buffer
             run(source, sink, speed, time) {
                 const gl = this.gl;
                 const next = 1 - this.current;
 
-                // Use our program
                 gl.useProgram(this.program);
-
-                // Set uniforms
                 gl.uniform2f(this.uSourceLoc, source[0], source[1]);
                 gl.uniform2f(this.uSinkLoc, sink[0], sink[1]);
                 gl.uniform1f(this.uSpeedLoc, speed);
                 gl.uniform1f(this.uTimeLoc, time);
 
-                // Enable blending and point size (essential for nice particles)
                 gl.enable(gl.BLEND);
                 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
                 gl.enable(gl.PROGRAM_POINT_SIZE);
 
-                // Bind source VAO
                 gl.bindVertexArray(this.vaos[this.current]);
-
-                // Bind destination buffer as transform feedback target
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.buffers[next]);
 
-                // Perform transform feedback
                 gl.beginTransformFeedback(gl.POINTS);
                 gl.drawArrays(gl.POINTS, 0, this.count);
                 gl.endTransformFeedback();
 
-                // Unbind to clean up (good practice)
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
                 gl.bindVertexArray(null);
-
-                // Disable states that might interfere with p5.js
                 gl.disable(gl.BLEND);
                 gl.disable(gl.PROGRAM_POINT_SIZE);
 
-                // Swap buffers
                 this.current = next;
             }
 
-            // Change particle count (recreate everything)
             setCount(newCount) {
                 if (newCount === this.count) return;
                 this.count = newCount;
-                // Delete old buffers/vaos
                 for (let i = 0; i < 2; i++) {
                     this.gl.deleteBuffer(this.buffers[i]);
                     this.gl.deleteVertexArray(this.vaos[i]);
                 }
-                // Create new ones
                 this.buffers = [this.createBuffer(newCount), this.createBuffer(newCount)];
                 this.vaos = [this.gl.createVertexArray(), this.gl.createVertexArray()];
                 for (let i = 0; i < 2; i++) {
@@ -512,10 +462,10 @@
         }
 
         // --------------------------------------------------------------
-        // p5 Sketch
+        // p5 Sketch (P2D) – Trail and UI only
         // --------------------------------------------------------------
         let pipeline;
-        let particleCount = 2000;          // current count (from slider)
+        let particleCount = 2000;
         let flowSpeed = 0.5;
         let autoDrift = true;
         let source = [0.5, 0.0];
@@ -523,25 +473,28 @@
         let t = 0;
 
         function setup() {
-            // Create canvas with WebGL2 context
-            createCanvas(windowWidth, windowHeight, WEBGL, { version: 2 });
-            let gl = canvas.GL;
+            // p5 canvas in P2D mode – for trail effect
+            createCanvas(windowWidth, windowHeight, P2D);
+            colorMode(RGB, 255);
+            background(0);
+
+            // Get the dedicated WebGL2 canvas and set its size
+            const particleCanvas = document.getElementById('particle-canvas');
+            particleCanvas.width = windowWidth;
+            particleCanvas.height = windowHeight;
+
+            // Obtain WebGL2 context
+            const gl = particleCanvas.getContext('webgl2');
             if (!gl) {
                 console.error('WebGL2 not supported – falling back to simple mode');
-                // Optionally display a message to the user
                 noLoop();
                 return;
             }
-            
-            // Set background color mode
-            colorMode(RGB, 255);
-            background(0);
-        
-            // Initialize the pipeline (use canvas.GL to get the WebGL2 context)
-            // let gl = canvas.GL;
+
+            // Initialize pipeline
             pipeline = new GPUPhysicsPipeline(gl, particleCount);
-            
-            // Set up UI event listeners
+
+            // UI event listeners
             document.getElementById('particleCount').addEventListener('input', (e) => {
                 let val = parseInt(e.target.value);
                 document.getElementById('particleCountVal').innerText = val;
@@ -559,7 +512,6 @@
                 if (pipeline) pipeline.resetParticles();
             });
             document.getElementById('clearPolesBtn').addEventListener('click', () => {
-                // Reset source/sink to default
                 source = [0.5, 0.0];
                 sink = [-0.5, 0.0];
                 t = 0;
@@ -570,28 +522,23 @@
         }
 
         function draw() {
-            // 1. Draw trail (semi-transparent black rectangle) using p5
-            resetMatrix(); // remove any 3D transformations
-            noStroke();
-            fill(0, 20);   // alpha 20/255 ~ 0.078
-            rect(-width/2, -height/2, width, height);
+            // 1. Draw trail on p5 canvas (P2D)
+            background(0, 20); // semi-transparent black for trail effect
 
             // 2. Update source/sink based on auto-drift or mouse
             if (autoDrift) {
                 source = [Math.sin(t) * 0.6, Math.cos(t * 1.3) * 0.6];
                 sink = [Math.cos(t) * 0.6, Math.sin(t * 1.2) * 0.6];
             } else {
-                // Map mouse to NDC
                 let mx = (mouseX / width) * 2 - 1;
                 let my = -(mouseY / height) * 2 + 1; // flip Y
-                // Clamp to [-1,1]
                 mx = Math.max(-1, Math.min(1, mx));
                 my = Math.max(-1, Math.min(1, my));
                 source = [mx, my];
                 sink = [-mx, -my];
             }
 
-            // 3. Run the GPU pipeline (this does the physics and draws particles)
+            // 3. Run the WebGL2 pipeline on the separate canvas
             if (pipeline) {
                 pipeline.run(source, sink, flowSpeed, millis() / 1000);
             }
@@ -600,64 +547,17 @@
         }
 
         function windowResized() {
+            // Resize p5 canvas
             resizeCanvas(windowWidth, windowHeight);
-        }
-
-        // Keyboard shortcuts (optional)
-        function keyPressed() {
-            if (key === '+') {
-                // Placeholder for future: add source?
-            } else if (key === '-') {
-                // Placeholder for future: add sink?
+            // Resize particle canvas
+            const particleCanvas = document.getElementById('particle-canvas');
+            particleCanvas.width = windowWidth;
+            particleCanvas.height = windowHeight;
+            // Update viewport for WebGL
+            if (pipeline) {
+                pipeline.gl.viewport(0, 0, windowWidth, windowHeight);
             }
         }
     </script>
-
-    <!-- ==================================================================
-         Note on integrating a C++ Parallel Engine (WebAssembly)
-         ==================================================================
-         If you want to move the simulation logic to C++ for even higher
-         performance or more complex physics, you would:
-
-         1. Write your C++ code using something like:
-            - Emscripten to compile to WebAssembly.
-            - Use WebGL from C++ via Emscripten's GL wrapper, or keep the
-              rendering in JS and only do computation in Wasm.
-         2. Expose a class (e.g., `FermatEngine`) with methods like
-            `init(count)`, `step(dt, source, sink)`, `getParticleBuffer()`.
-         3. In JS, instantiate the module and call those methods.
-         4. For rendering, either:
-            - Copy particle data from Wasm heap to a WebGL buffer each frame
-              (more overhead), or
-            - Let Wasm manage the WebGL buffer directly by passing the
-              buffer object or using shared memory (advanced).
-         5. The transform feedback approach above is already highly optimized
-            (pure GPU), so a C++ engine would only make sense if you need
-            CPU‑side logic that is hard to express in shaders.
-
-         Example skeleton (requires Emscripten bindings):
-         ```cpp
-         class FermatEngine {
-            std::vector<float> particles;
-         public:
-            void init(int count) { ... }
-            void step(float dt, float sx, float sy, float kx, float ky) { ... }
-            float* getParticleData() { return particles.data(); }
-         };
-         // EMSCRIPTEN_BINDINGS(...)
-         ```
-         Then in JS:
-         ```js
-         Module.onRuntimeInitialized = () => {
-            engine = new Module.FermatEngine();
-            engine.init(100000);
-         };
-         // In draw: engine.step(deltaTime, srcX, srcY, sinkX, sinkY);
-         // Then upload engine.getParticleData() to a WebGL buffer.
-         ```
-    -->
 </body>
 </html>
-
-
-
