@@ -1,220 +1,232 @@
-/** * sketch.js – Super Engine Interface
- * This script bridges the Web UI to the C++ Parallel API.
- * High Throughput: 100,000+ particles handled in C++ VRAM.
- * Low Latency: Zero-copy rendering.
+// sketch.js – Liquid Particle System (Fermat's Edition)
 
-let superEngine = null;
-let targetParticleCount = 100000; // The "Super Engine" throughput
-let flowSpeed = 0.8;
-let autoDrift = true;
+let poles = [];
+let particles = [];
 let t = 0;
+let autoDrift = true;
+let flowSpeed = 0.5;
+let targetParticleCount = 2000;
 
-// This comes from the compiled Wasm module
-Module.onRuntimeInitialized = () => {
-    console.log("C++ Parallel API Hooked.");
-    // Initialize the engine with 100k particles
-    superEngine = new Module.FermatEngine(targetParticleCount);
-    // Initial Lens Radius
-    superEngine.setLensRadius(250.0);
-};
+// Fermat Lens Constants
+let lensRadius = 220;
+let maxRefractiveIndex = 3.0;
 
 function setup() {
-    // We use WEBGL mode to give the C++ API a GPU context to draw into
-    createCanvas(windowWidth, windowHeight, WEBGL);
-    
-    // Set p5 to handle colors in the same range as the C++ logic if needed
-    colorMode(HSB, 360, 100, 100, 1);
-    background(240, 60, 5);
+  createCanvas(windowWidth, windowHeight);
+  colorMode(HSB, 360, 100, 100, 1);
+  
+  // Initial poles setup
+  poles.push(new TemporalPole(width * 0.7, height / 2, 1, "SOURCE"));
+  poles.push(new TemporalPole(width * 0.3, height / 2, -1, "SINK"));
+  
+  initParticles(targetParticleCount);
+  background(240, 50, 5, 1); 
+}
+
+function initParticles(count) {
+  particles = [];
+  for (let i = 0; i < count; i++) {
+    particles.push(new Particle());
+  }
 }
 
 function draw() {
-    // Ensure the C++ Engine is warmed up before calling
-    if (!superEngine) {
-        drawLoadingState();
-        return;
-    }
+  // LAYER 1: Feedback Loop for silky trails
+  blendMode(BLEND);
+  fill(240, 60, 4, 0.12); // Deep space blue
+  rect(0, 0, width, height);
+  
+  // LAYER 2: The Refractive Field Visualization
+  drawRefractiveLens();
+  
+  // Update poles position
+  if (autoDrift) {
+    for (let p of poles) p.drift();
+  }
 
-    // 1. LAYER 1: Background & Trails
-    // We draw a semi-transparent quad to create the silky fluid trails
+  // LAYER 3: Particle Dynamics (Fermat's Principle)
+  blendMode(ADD); 
+  for (let p of particles) {
+    p.update();
+    p.display();
+  }
+  
+  // LAYER 4: Interface & Poles
+  blendMode(BLEND);
+  for (let p of poles) p.display();
+  
+  t += 0.008;
+}
+
+function drawRefractiveLens() {
+  push();
+  noFill();
+  for(let i = 0; i < 3; i++) {
+    let pulse = sin(t + i*0.5) * 8;
+    stroke(190, 80, 100, 0.08); 
+    circle(width/2, height/2, (lensRadius * 2) + pulse);
+  }
+  pop();
+}
+
+// --------------------------------------------------------------
+// Particle Logic
+// --------------------------------------------------------------
+
+class Particle {
+  constructor() {
+    this.spawn();
+  }
+
+  spawn() {
+    this.pos = createVector(random(width), random(height));
+    this.prevPos = this.pos.copy();
+    this.vel = createVector(0, 0);
+    this.hue = 200;
+    this.brightness = 0;
+  }
+
+  update() {
+    this.prevPos = this.pos.copy();
+    
+    // 1. Calculate Forces
+    let baseForce = calculateForce(this.pos.x, this.pos.y);
+    let fermatForce = calculateFermatForce(this.pos.x, this.pos.y);
+    let n = getRefractiveIndex(this.pos.x, this.pos.y);
+
+    // 2. Physics Integration
+    // Light bends toward higher refractive index regions (Fermat's Principle)
+    this.vel.x += (baseForce.x + fermatForce.x * 20) * flowSpeed;
+    this.vel.y += (baseForce.y + fermatForce.y * 20) * flowSpeed;
+    this.vel.limit(4);
+    
+    // 3. Fermat velocity adjustment: Speed is slower in denser medium (v = c/n)
+    this.pos.x += this.vel.x / n;
+    this.pos.y += this.vel.y / n;
+
+    // 4. Color Dynamics: Shift hue based on local refraction and velocity
+    let speed = this.vel.mag();
+    let nEffect = map(n, 1, maxRefractiveIndex, 0, 100);
+    this.hue = (200 + nEffect + (this.vel.x * 5)) % 360;
+    this.brightness = map(speed, 0, 4, 40, 100);
+
+    this.edges();
+  }
+
+  display() {
+    let speed = this.vel.mag();
+    strokeWeight(map(speed, 0, 4, 0.5, 2.8));
+    stroke(this.hue, 80, this.brightness, 0.6);
+    line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
+  }
+
+  edges() {
+    if (this.pos.x < 0 || this.pos.x > width || this.pos.y < 0 || this.pos.y > height) {
+      this.spawn();
+    }
+  }
+}
+
+// --------------------------------------------------------------
+// Field Logic Functions
+// --------------------------------------------------------------
+
+function getRefractiveIndex(x, y) {
+  let d = dist(x, y, width/2, height/2);
+  if (d < lensRadius) {
+    // Smooth cosine falloff from center of lens
+    return 1.0 + (maxRefractiveIndex - 1.0) * (1 + cos(PI * d / lensRadius)) / 2;
+  }
+  return 1.0;
+}
+
+function calculateFermatForce(x, y) {
+  let eps = 2.0; // Gradient step
+  let nL = getRefractiveIndex(x - eps, y);
+  let nR = getRefractiveIndex(x + eps, y);
+  let nU = getRefractiveIndex(x, y - eps);
+  let nD = getRefractiveIndex(x, y + eps);
+  // Returns the gradient vector (steer toward the "slowest" time)
+  return createVector((nR - nL), (nD - nU));
+}
+
+function calculateForce(x, y) {
+  let v = createVector(0, 0);
+  for (let p of poles) {
+    let d = dist(x, y, p.pos.x, p.pos.y);
+    d = constrain(d, 50, 800);
+    let mag = (p.q * 4000) / (d * d);
+    let angle = atan2(y - p.pos.y, x - p.pos.x);
+    v.x += cos(angle) * mag;
+    v.y += sin(angle) * mag;
+  }
+  return v;
+}
+
+class TemporalPole {
+  constructor(x, y, q, label) {
+    this.pos = createVector(x, y);
+    this.q = q; // Charge: positive (future), negative (past)
+    this.label = label;
+    this.seed = random(1000);
+  }
+  drift() {
+    this.pos.x = noise(this.seed + t) * width;
+    this.pos.y = noise(this.seed + 100 + t) * height;
+  }
+  display() {
     push();
-    resetMatrix();
-    noStroke();
-    fill(240, 60, 5, 0.15); 
-    rect(-width/2, -height/2, width, height);
-    pop();
-
-    // 2. LAYER 2: Input & Logic (Low Latency Control)
-    // Map mouse/auto-drift to Normalized Device Coordinates (-1.0 to 1.0)
-    let srcX = autoDrift ? (sin(t) * 0.6) : map(mouseX, 0, width, -1, 1);
-    let srcY = autoDrift ? (cos(t * 1.3) * 0.6) : map(mouseY, 0, height, -1, 1);
-    
-    // Use the API to set the Source and Sink (Directly into C++ Memory)
-    superEngine.setSource(srcX, srcY, 0.0);
-    superEngine.setSink(-srcX, -srcY, 0.0);
-
-    // 3. LAYER 3: The Heavy Lifting (High Throughput Physics)
-    // Call the C++ step function. This triggers the Parallel Compute Shader.
-    // 100k particles are updated here in roughly 0.5ms.
-    superEngine.step(deltaTime / 1000.0);
-
-    // 4. LAYER 4: Zero-Copy Rendering
-    // The C++ API tells the GPU to draw the particle buffer it already holds.
-    // No particle data is sent over the bus; it's already in VRAM.
-    superEngine.render();
-
-    t += 0.005;
-}
-
-// --------------------------------------------------------------
-// API Event Handlers (Bridging the HTML UI to C++)
-// --------------------------------------------------------------
-
-function updateParticleCount(val) {
-    targetParticleCount = parseInt(val);
-    document.getElementById('particleCountVal').innerText = val;
-    
-    if (superEngine) {
-        // Destroy the old C++ object to free VRAM
-        superEngine.delete(); 
-        // Re-allocate the Super Engine with the new count
-        superEngine = new Module.FermatEngine(targetParticleCount);
+    let c = this.q > 0 ? color(20, 90, 100) : color(190, 90, 100);
+    translate(this.pos.x, this.pos.y);
+    for(let i = 3; i > 0; i--) {
+      fill(hue(c), saturation(c), brightness(c), 0.1 / i);
+      noStroke();
+      circle(0, 0, i * 35);
     }
+    fill(255);
+    textAlign(CENTER);
+    textSize(11);
+    text(this.label, 0, -30);
+    pop();
+  }
 }
 
-function updateSpeed(val) {
-    flowSpeed = parseFloat(val);
-    document.getElementById('speedVal').innerText = val;
-    // Note: C++ uses deltaTime, but we can pass flowSpeed as a uniform
-    // if we added a setSpeed method to the API.
-}
+// --------------------------------------------------------------
+// UI Event Handlers (Linked to HTML)
+// --------------------------------------------------------------
 
 function toggleMotion() {
-    autoDrift = !autoDrift;
+  autoDrift = !autoDrift;
 }
 
 function resetParticles() {
-    if (superEngine) {
-        // Force re-init of the particle buffer in VRAM
-        superEngine.delete();
-        superEngine = new Module.FermatEngine(targetParticleCount);
-    }
+  for (let p of particles) p.spawn();
+}
+
+function resetField() {
+  poles = [];
+}
+
+function updateParticleCount(val) {
+  targetParticleCount = parseInt(val);
+  document.getElementById('particleCountVal').innerText = val;
+  initParticles(targetParticleCount);
+}
+
+function updateSpeed(val) {
+  flowSpeed = parseFloat(val);
+  document.getElementById('speedVal').innerText = val;
+}
+
+function keyPressed() {
+  if (key === '+') {
+    poles.push(new TemporalPole(mouseX, mouseY, 1, "SOURCE"));
+  } else if (key === '-') {
+    poles.push(new TemporalPole(mouseX, mouseY, -1, "SINK"));
+  }
+  return false; // Prevent browser scrolling
 }
 
 function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
-}
-
-function drawLoadingState() {
-    background(240, 60, 5);
-    fill(255);
-    textAlign(CENTER);
-    text("INITIALIZING PARALLEL C++ API...", 0, 0);
-}
-
- */
-
-
-let particleCount = 100000;
-let gl, pipeline;
-let source = [0.5, 0.0];
-let sink = [-0.5, 0.0];
-let t = 0;
-
-function setup() {
-    let canvas = createCanvas(windowWidth, windowHeight, WEBGL);
-    gl = canvas.GL;
-    
-    // Initialize the GPU Parallel Pipeline
-    pipeline = new GPUPhysicsPipeline(gl, particleCount);
-    background(0);
-}
-
-function draw() {
-    // 1. Silky Trail Effect
-    resetMatrix();
-    noStroke();
-    fill(0, 20); 
-    rect(-width/2, -height/2, width, height);
-
-    // 2. Update Controls (Low Latency)
-    source = [sin(t) * 0.6, cos(t * 1.2) * 0.6];
-    sink = [cos(t) * 0.6, sin(t * 1.2) * 0.6];
-    
-    // 3. Step & Render (High Throughput)
-    pipeline.run(source, sink, 0.8);
-    
-    t += 0.01;
-}
-
-class GPUPhysicsPipeline {
-    constructor(gl, count) {
-        this.gl = gl;
-        this.count = count;
-        this.current = 0; // Ping-pong buffer toggle
-        
-        // Setup Shaders
-        const vSrc = document.getElementById('vshader').text;
-        const fSrc = document.getElementById('fshader').text;
-        this.program = this.createProgram(gl, vSrc, fSrc);
-
-        // Create 2 Buffers (Ping-Pong Architecture)
-        // One buffer holds current data, the other receives the update
-        this.buffers = [this.createBuffer(count), this.createBuffer(count)];
-        this.vaos = [gl.createVertexArray(), gl.createVertexArray()];
-
-        for (let i = 0; i < 2; i++) {
-            gl.bindVertexArray(this.vaos[i]);
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers[i]);
-            gl.enableVertexAttribArray(0); // pos
-            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
-            gl.enableVertexAttribArray(1); // vel
-            gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
-        }
-    }
-
-    createBuffer(count) {
-        let data = new Float32Array(count * 4);
-        for(let i=0; i<data.length; i+=4) {
-            data[i] = (Math.random() * 2 - 1); // x
-            data[i+1] = (Math.random() * 2 - 1); // y
-        }
-        let b = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, b);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW);
-        return b;
-    }
-
-    createProgram(gl, v, f) {
-        let vs = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vs, v); gl.compileShader(vs);
-        let fs = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fs, f); gl.compileShader(fs);
-        
-        let p = gl.createProgram();
-        gl.attachShader(p, vs); gl.attachShader(p, fs);
-        // The "Magic" Link: Tell the GPU which outputs to save
-        gl.transformFeedbackVaryings(p, ['v_pos', 'v_vel'], gl.INTERLEAVED_ATTRIBS);
-        gl.linkProgram(p);
-        return p;
-    }
-
-    run(src, snk, speed) {
-        let next = 1 - this.current;
-        gl.useProgram(this.program);
-        
-        // Uniforms
-        gl.uniform2f(gl.getUniformLocation(this.program, "u_source"), src[0], src[1]);
-        gl.uniform2f(gl.getUniformLocation(this.program, "u_sink"), snk[0], snk[1]);
-        gl.uniform1f(gl.getUniformLocation(this.program, "u_speed"), speed);
-
-        gl.bindVertexArray(this.vaos[this.current]);
-        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.buffers[next]);
-
-        gl.beginTransformFeedback(gl.POINTS);
-        gl.drawArrays(gl.POINTS, 0, this.count);
-        gl.endTransformFeedback();
-        
-        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
-        this.current = next; // Swap
-    }
+  resizeCanvas(windowWidth, windowHeight);
 }
