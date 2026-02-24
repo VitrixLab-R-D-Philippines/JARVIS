@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquid Field – Particle Flow (WebGL2 + p5.js Trail)</title>
+    <title>Liquid Field – Particle Flow (Stable WebGL2)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
     <style>
         /* ===== RESET & BASE ===== */
@@ -30,6 +30,8 @@
             width: 100%;
             height: 100%;
             z-index: 0; /* bottom – particles */
+            /* Fixed internal resolution, scaled by CSS */
+            object-fit: cover;
         }
         #defaultCanvas0 {  /* p5.js canvas (P2D) */
             display: block;
@@ -209,7 +211,7 @@
     </style>
 </head>
 <body>
-    <!-- Dedicated WebGL2 canvas for particles -->
+    <!-- Dedicated WebGL2 canvas for particles (fixed internal resolution) -->
     <canvas id="particle-canvas"></canvas>
 
     <div id="ui-panel" role="region" aria-label="Simulation controls">
@@ -365,6 +367,7 @@
                 const buf = gl.createBuffer();
                 gl.bindBuffer(gl.ARRAY_BUFFER, buf);
                 gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null); // unbind to avoid conflicts
                 return buf;
             }
 
@@ -380,6 +383,7 @@
                         data[j*4+3] = 0;
                     }
                     gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, null);
                 }
                 this.current = 0;
             }
@@ -413,42 +417,48 @@
             run(source, sink, speed, time) {
                 const gl = this.gl;
                 const next = 1 - this.current;
-            
+
                 gl.useProgram(this.program);
-            
-                // Set uniforms
                 gl.uniform2f(this.uSourceLoc, source[0], source[1]);
                 gl.uniform2f(this.uSinkLoc, sink[0], sink[1]);
                 gl.uniform1f(this.uSpeedLoc, speed);
                 gl.uniform1f(this.uTimeLoc, time);
-            
-                // Enable blending and point size (valid in WebGL2)
+
                 gl.enable(gl.BLEND);
                 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-                gl.enable(gl.PROGRAM_POINT_SIZE);  // INVALID_ENUM? Check later.
-            
-                // Bind source VAO (this sets up vertex attributes from the current buffer)
+
+                // PROGRAM_POINT_SIZE is a WebGL2 capability; check if defined
+                if (gl.PROGRAM_POINT_SIZE !== undefined) {
+                    gl.enable(gl.PROGRAM_POINT_SIZE);
+                } else {
+                    // In WebGL1, point size is always enabled but we have no control
+                    console.warn('PROGRAM_POINT_SIZE not supported; point size may be fixed.');
+                }
+
+                // Bind source VAO
                 gl.bindVertexArray(this.vaos[this.current]);
-            
-                // *** CRITICAL FIX: Unbind any buffer from ARRAY_BUFFER to avoid conflict with TFB ***
+
+                // Unbind any buffer from ARRAY_BUFFER to avoid conflict with transform feedback
                 gl.bindBuffer(gl.ARRAY_BUFFER, null);
-            
+
                 // Bind destination buffer as transform feedback target
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.buffers[next]);
-            
+
                 // Perform transform feedback
                 gl.beginTransformFeedback(gl.POINTS);
                 gl.drawArrays(gl.POINTS, 0, this.count);
                 gl.endTransformFeedback();
-            
+
                 // Clean up bindings
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
                 gl.bindVertexArray(null);
-            
-                // Disable states that might interfere with other drawing (like p5)
+
+                // Disable states that might interfere
                 gl.disable(gl.BLEND);
-                gl.disable(gl.PROGRAM_POINT_SIZE);
-            
+                if (gl.PROGRAM_POINT_SIZE !== undefined) {
+                    gl.disable(gl.PROGRAM_POINT_SIZE);
+                }
+
                 // Swap buffers
                 this.current = next;
             }
@@ -492,10 +502,10 @@
             colorMode(RGB, 255);
             background(0);
 
-            // Get the dedicated WebGL2 canvas and set its size
+            // Get the dedicated WebGL2 canvas and set a fixed high resolution
             const particleCanvas = document.getElementById('particle-canvas');
-            particleCanvas.width = windowWidth;
-            particleCanvas.height = windowHeight;
+            particleCanvas.width = 1920;  // fixed internal resolution
+            particleCanvas.height = 1080; // (scaled by CSS to fit window)
 
             // Obtain WebGL2 context
             const gl = particleCanvas.getContext('webgl2');
@@ -504,6 +514,10 @@
                 noLoop();
                 return;
             }
+
+            // Verify WebGL2 context
+            console.log('WebGL version:', gl.getParameter(gl.VERSION));
+            console.log('PROGRAM_POINT_SIZE value:', gl.PROGRAM_POINT_SIZE);
 
             // Initialize pipeline
             pipeline = new GPUPhysicsPipeline(gl, particleCount);
@@ -544,6 +558,7 @@
                 source = [Math.sin(t) * 0.6, Math.cos(t * 1.3) * 0.6];
                 sink = [Math.cos(t) * 0.6, Math.sin(t * 1.2) * 0.6];
             } else {
+                // Map mouse to NDC (note: mouseX/Y are from p5 canvas, which matches window)
                 let mx = (mouseX / width) * 2 - 1;
                 let my = -(mouseY / height) * 2 + 1; // flip Y
                 mx = Math.max(-1, Math.min(1, mx));
@@ -561,18 +576,10 @@
         }
 
         function windowResized() {
-            // Resize p5 canvas
+            // Resize p5 canvas only (the particle canvas has fixed internal size)
             resizeCanvas(windowWidth, windowHeight);
-            // Resize particle canvas
-            const particleCanvas = document.getElementById('particle-canvas');
-            particleCanvas.width = windowWidth;
-            particleCanvas.height = windowHeight;
-            // Update viewport for WebGL
-            if (pipeline) {
-                pipeline.gl.viewport(0, 0, windowWidth, windowHeight);
-            }
+            // No need to resize particle canvas dimensions – it's fixed and scaled by CSS.
         }
     </script>
 </body>
 </html>
-
