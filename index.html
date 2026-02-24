@@ -413,29 +413,43 @@
             run(source, sink, speed, time) {
                 const gl = this.gl;
                 const next = 1 - this.current;
-
+            
                 gl.useProgram(this.program);
+            
+                // Set uniforms
                 gl.uniform2f(this.uSourceLoc, source[0], source[1]);
                 gl.uniform2f(this.uSinkLoc, sink[0], sink[1]);
                 gl.uniform1f(this.uSpeedLoc, speed);
                 gl.uniform1f(this.uTimeLoc, time);
-
+            
+                // Enable blending and point size (valid in WebGL2)
                 gl.enable(gl.BLEND);
                 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-                gl.enable(gl.PROGRAM_POINT_SIZE);
-
+                gl.enable(gl.PROGRAM_POINT_SIZE);  // INVALID_ENUM? Check later.
+            
+                // Bind source VAO (this sets up vertex attributes from the current buffer)
                 gl.bindVertexArray(this.vaos[this.current]);
+            
+                // *** CRITICAL FIX: Unbind any buffer from ARRAY_BUFFER to avoid conflict with TFB ***
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            
+                // Bind destination buffer as transform feedback target
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.buffers[next]);
-
+            
+                // Perform transform feedback
                 gl.beginTransformFeedback(gl.POINTS);
                 gl.drawArrays(gl.POINTS, 0, this.count);
                 gl.endTransformFeedback();
-
+            
+                // Clean up bindings
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
                 gl.bindVertexArray(null);
+            
+                // Disable states that might interfere with other drawing (like p5)
                 gl.disable(gl.BLEND);
                 gl.disable(gl.PROGRAM_POINT_SIZE);
-
+            
+                // Swap buffers
                 this.current = next;
             }
 
@@ -561,3 +575,4 @@
     </script>
 </body>
 </html>
+
