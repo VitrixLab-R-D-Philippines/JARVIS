@@ -1,0 +1,54 @@
+#version 460 core
+layout(local_size_x = 256) in;
+
+struct Particle {
+    vec4 pos; // xyz = position, w = refractive index (cached)
+    vec4 vel; // xyz = velocity, w = age
+};
+
+layout(std430, binding = 0) buffer ParticleBuffer {
+    Particle particles[];
+};
+
+uniform float dt;
+uniform vec3 source;
+uniform vec3 sink;
+uniform float lensRadius;
+
+// Fermat's 3D Field: Light bends toward denser 'n'
+float getIndex(vec3 p) {
+    float d = length(p); // Distance from center
+    return (d < lensRadius) ? 1.0 + 2.5 * pow(cos(1.57 * d/lensRadius), 2.0) : 1.0;
+}
+
+// Numerical Gradient: Finding the path of "Least Time"
+vec3 getGradient(vec3 p) {
+    float e = 0.01;
+    return vec3(
+        getIndex(p + vec3(e,0,0)) - getIndex(p - vec3(e,0,0)),
+        getIndex(p + vec3(0,e,0)) - getIndex(p - vec3(0,e,0)),
+        getIndex(p + vec3(0,0,e)) - getIndex(p - vec3(0,0,e))
+    ) / (2.0 * e);
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    Particle p = particles[i];
+
+    // 1. Force Fields (Source/Sink)
+    vec3 f = normalize(source - p.pos.xyz) * 0.02;
+    f += normalize(p.pos.xyz - sink) * 0.01;
+
+    // 2. Fermat's Principle (Refractive steering)
+    vec3 gradN = getGradient(p.pos.xyz);
+    f += gradN * 5.0; // Steer toward higher density
+
+    // 3. Update with Medium Resistance
+    float n = getIndex(p.pos.xyz);
+    p.vel.xyz += f * dt;
+    p.vel.xyz = clamp(p.vel.xyz, -0.5/n, 0.5/n); // Speed of light limit: v = c/n
+    
+    p.pos.xyz += p.vel.xyz * (1.0/n); 
+
+    particles[i] = p;
+}
