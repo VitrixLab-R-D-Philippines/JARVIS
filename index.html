@@ -494,15 +494,16 @@
 
         function setup() {
             // Create canvas with WebGL2 context
-            createCanvas(windowWidth, windowHeight, WEBGL2);
-            // Set background color mode (HSB not necessary, we'll use RGBA)
+            createCanvas(windowWidth, windowHeight, WEBGL, { version: 2 });
+        
+            // Set background color mode
             colorMode(RGB, 255);
             background(0);
-
-            // Initialize the pipeline
-            let gl = canvas.GL;  // p5 exposes the WebGL context as canvas.GL
+        
+            // Initialize the pipeline (use canvas.GL to get the WebGL2 context)
+            let gl = canvas.GL;
             pipeline = new GPUPhysicsPipeline(gl, particleCount);
-
+            
             // Set up UI event listeners
             document.getElementById('particleCount').addEventListener('input', (e) => {
                 let val = parseInt(e.target.value);
@@ -620,3 +621,4 @@
     -->
 </body>
 </html>
+
