@@ -298,18 +298,58 @@
     </div>
 
     <script src="sketch.js"></script>
+    <script id="vshader" type="x-shader/x-vertex">#version 300 es
+        layout(location = 0) in vec2 a_pos;
+        layout(location = 1) in vec2 a_vel;
     
-    <script src="FermatEngineWasm.js"></script>
-    <script>
-        // Global variable for our C++ Engine Instance
-        let superEngine;
+        uniform vec2 u_source;
+        uniform vec2 u_sink;
+        uniform float u_time;
+        uniform float u_speed;
+        
+        out vec2 v_pos;
+        out vec2 v_vel;
+        out float v_density;
     
-        // Wait for the Wasm binary to "Warm Up"
-        Module.onRuntimeInitialized = () => {
-            console.log("Super Engine API Loaded.");
-            superEngine = new Module.FermatEngine(100000); // 100k particles
-        };
+        void main() {
+            vec2 p = a_pos;
+            vec2 v = a_vel;
+    
+            // Fermat Refraction Logic
+            float dLens = distance(p, vec2(0.0));
+            float n = 1.0 + 2.5 * exp(-8.0 * dLens * dLens);
+            
+            // Forces
+            vec2 acc = normalize(u_source - p) * (0.002 / (distance(p, u_source) + 0.1));
+            acc -= normalize(u_sink - p) * (0.002 / (distance(p, u_sink) + 0.1));
+            
+            // Parallel Integration
+            v += acc * u_speed;
+            v *= 0.98; // Friction
+            vec2 nextPos = p + (v / n);
+    
+            // Boundary Wrap
+            if(abs(nextPos.x) > 1.0) { nextPos.x *= -0.9; v *= -0.5; }
+            if(abs(nextPos.y) > 1.0) { nextPos.y *= -0.9; v *= -0.5; }
+    
+            v_pos = nextPos;
+            v_vel = v;
+            v_density = n;
+            
+            gl_Position = vec4(nextPos, 0.0, 1.0);
+            gl_PointSize = 1.2;
+        }
+    </script>
+    
+    <script id="fshader" type="x-shader/x-fragment">#version 300 es
+        precision highp float;
+        in float v_density;
+        out vec4 outColor;
+        void main() {
+            outColor = vec4(0.2, 0.4 + (v_density * 0.2), 0.9, 0.8);
+        }
     </script>
 </body>
 
 </html>
+
